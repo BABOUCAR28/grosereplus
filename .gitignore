@@ -1,0 +1,33 @@
+# Dépendances
+node_modules/
+**/node_modules/
+
+# Builds
+frontend/dist/
+backend/dist/
+*.log
+
+# Environnement — ne JAMAIS committer de vraies valeurs.
+# .env.example et .env.test restent trackés (ce sont des gabarits/fixtures).
+/.env
+/.env.local
+backend/.env
+backend/.env.local
+backend/.env.production
+frontend/.env
+frontend/.env.local
+
+# Uploads et logs applicatifs
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/logs/*
+!backend/logs/.gitkeep
+
+# Éditeurs / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Certificats Let's Encrypt (générés par le service certbot, jamais commit)
+nginx/ssl/

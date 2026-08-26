@@ -1,0 +1,94 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: gp-suite-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE:      ${DB_NAME:-gp_suite}
+      MYSQL_USER:          ${DB_USER:-gp_user}
+      MYSQL_PASSWORD:      ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD manquant dans .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - gp-suite-network
+
+  backend:
+    build: ./backend
+    container_name: gp-suite-backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/usr/src/app/uploads
+      - backend_logs:/usr/src/app/logs
+    # 🔧 Correction : port exposé pour le healthcheck
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s  # Augmenté pour la production
+      retries: 5
+    networks:
+      - gp-suite-network
+
+  frontend:
+    build: ./frontend
+    container_name: gp-suite-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - gp-suite-network
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: gp-suite-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_conf:/etc/nginx/ssl:ro
+      - certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    networks:
+      - gp-suite-network
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: gp-suite-certbot
+    restart: unless-stopped
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h; done"
+    networks:
+      - gp-suite-network
+
+volumes:
+  mysql_data:
+  backend_uploads:
+  backend_logs:
+  certbot_conf:
+  certbot_webroot:
+
+networks:
+  gp-suite-network:
+    driver: bridge
